@@ -8,7 +8,7 @@
 **Concept:** Never operate as the `root` user to avoid catastrophic accidental system changes. Create a standard user and grant administrative (`sudo`) privileges.
 
 *   **Login as root:** `ssh root@[server_ip]`
-*   **Create a new user:** `adduser [username]`
+*   **Create a new user:** `adduser [username]` (`adduser` optionally).
 *   **Grant Sudo Access (Method 1 - Standard):** `usermod -aG sudo [username]`
 *   **Grant Sudo Access (Method 2 - Manual `visudo`):**
     *   Command: `EDITOR=nano sudo visudo` (Forces nano editor if default is not set).
