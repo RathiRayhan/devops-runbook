@@ -15,8 +15,8 @@ Welcome to my DevOps engineering repository. This repository serves as a practic
 
 ### 🟢 Phase 1: Linux Administration & Core Infrastructure (Months 1–2)
 - [x] **Topic 1:** Linux Server Setup, SSH Hardening, UFW Firewall Configuration
-- [ ] **Topic 2:** Nginx Reverse Proxy, Load Balancing & SSL/TLS Certificates
-- [ ] **Topic 3:** Advanced Bash Scripting, Cron Jobs & Automated Backups
+- [x] **Topic 2:** Nginx Reverse Proxy, Load Balancing & SSL/TLS Certificates
+- [x] **Topic 3:** Advanced Bash Scripting, Cron Jobs & Automated Backups
 
 ### 🟡 Phase 2: Containerization & Orchestration (Months 3–4)
 - [ ] **Topic 4:** Docker Architecture & Fundamentals
