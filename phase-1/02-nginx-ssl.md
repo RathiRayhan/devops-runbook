@@ -1,139 +1,117 @@
 # Topic 2: Nginx Web Server, Reverse Proxy & SSL Configuration
 
-## Objective
-Configure Nginx as a reverse proxy, host a static website, troubleshoot common permission/port errors, and secure the server with HTTPS using Let's Encrypt (Certbot).
+## Overview
+This runbook outlines the industry-standard procedures for configuring Nginx as a highly efficient web server and reverse proxy. It covers deploying static frontends, routing traffic to backend applications (Node.js, Python, etc.) with proper header preservation, securing domains with Let's Encrypt SSL (HTTPS), and automating certificate renewals.
 
 ---
 
-## Part 1: Nginx Reverse Proxy Setup
-**Use Case:** Routing traffic from standard HTTP port (80) to a backend application running on a custom port (e.g., 8080).
+## 1. Hosting a Static Website (Frontend)
+**Use Case:** Deploying static sites (HTML/CSS/JS) or compiled frontend frameworks (React, Vue, Angular).
 
-1. **Install Nginx:**
-   ```bash
-   sudo apt update
-   sudo apt install nginx -y
-   ```
-
-2. **Create Configuration File:**
-   ```bash
-   sudo nano /etc/nginx/sites-available/simple-web-server
-   ```
-   *Configuration:*
-   ```nginx
-   server {
-       listen 80;
-       server_name <YOUR_VPS_IP>; # Replace with your server IP or Domain
-
-       location / {
-           proxy_pass [http://127.0.0.1:8080](http://127.0.0.1:8080);
-       }
-   }
-   ```
-
-3. **Enable Site via Symlink & Reload:**
-   ```bash
-   sudo ln -s /etc/nginx/sites-available/simple-web-server /etc/nginx/sites-enabled/
-   sudo nginx -t                # Test config for syntax errors
-   sudo systemctl reload nginx  # Graceful reload (Zero Downtime)
-   ```
-
----
-
-## Part 2: Hosting a Static Website (HTML/CSS/JS)
-**Use Case:** Serving a frontend portfolio directly from the server.
-
-1. **Transfer & Move Files:**
-   Use `scp` from the local machine to transfer the code, then move it to the web root:
-   ```bash
-   sudo mv /path/to/transferred/files /var/www/my-portfolio
-   ```
-
-2. **Create Nginx Configuration:**
-   ```bash
-   sudo nano /etc/nginx/sites-available/my-portfolio
-   ```
-   *Configuration:*
-   ```nginx
-   server {
-       listen 80;
-       server_name <YOUR_VPS_IP>; # Will be updated to domain later
-
-       location / {
-           root /var/www/my-portfolio;
-           index index.html;
-       }
-   }
-   ```
-
-3. **Enable and Reload:**
-   ```bash
-   sudo ln -s /etc/nginx/sites-available/my-portfolio /etc/nginx/sites-enabled/
-   sudo systemctl reload nginx
-   ```
-
----
-
-## Part 3: Troubleshooting Common Nginx Errors
-
-### Issue 1: Port 80 Conflict (Address already in use)
-**Cause:** Another config (e.g., `simple-web-server`) is already listening on Port 80.
-**Fix:** Remove the symlink of the conflicting site from `sites-enabled` (Do NOT delete the original file from `sites-available`).
+### Step 1: Transfer & Setup Web Root
+Transfer build files to the server and set up the web root directory.
 ```bash
-sudo rm /etc/nginx/sites-enabled/simple-web-server
-sudo systemctl reload nginx
-```
-
-### Issue 2: 403 Forbidden Error
-**Cause:** Nginx worker process runs as user `www-data` and lacks read permissions for the web root directory. Checked via `sudo tail -n 20 /var/log/nginx/error.log`.
-**Fix:** Correct ownership and permissions recursively.
-```bash
+sudo mv /path/to/transferred/files /var/www/my-portfolio
 sudo chown -R www-data:www-data /var/www/my-portfolio
 sudo chmod -R 755 /var/www/my-portfolio
 ```
+*Security Note:* Ensure no `.env` files containing sensitive credentials are placed inside `/var/www/`.
 
-**Security Warning (.env files):** 
-Ensure there are no `.env` files containing sensitive credentials inside the web root (`/var/www/...`). If present, they will be publicly exposed to the internet. Move them outside the web root or deny access via Nginx location blocks.
+### Step 2: Nginx Static Site Configuration
+Create the configuration file: `sudo nano /etc/nginx/sites-available/my-portfolio`
+```nginx
+server {
+    listen 80;
+    server_name <your_domain.com> www.<your_domain.com>;
+
+    location / {
+        root /var/www/my-portfolio;
+        index index.html index.htm;
+        try_files $uri $uri/ /index.html; # Crucial for React/Vue Router
+    }
+}
+```
+Enable and reload:
+```bash
+sudo ln -s /etc/nginx/sites-available/my-portfolio /etc/nginx/sites-enabled/
+sudo nginx -t && sudo systemctl reload nginx
+```
 
 ---
 
-## Part 4: Domain DNS & SSL/TLS Setup (Certbot)
-**Use Case:** Securing the website with a green padlock (HTTPS).
+## 2. Nginx Reverse Proxy (Production Standard)
+**Use Case:** Routing web traffic to backend applications (e.g., running on port 8080) while preserving the client's original IP address and supporting modern real-time features like WebSockets.
 
-1. **DNS Setup:**
-   * Log into the Domain Provider panel (e.g., Cloudflare, Namecheap).
-   * Add an **A Record**: Name `@` (or `subdomain_name`), Value: `<YOUR_VPS_IP>`.
+### Step 1: Production Reverse Proxy Configuration
+Create the configuration file: `sudo nano /etc/nginx/sites-available/backend-app`
+```nginx
+server {
+    listen 80;
+    server_name <your_domain.com> www.<your_domain.com>;
 
-2. **Update Nginx Config:**
-   Update `server_name` in `/etc/nginx/sites-available/my-portfolio` to the actual domain (e.g., `server_name <your_domain.com>;`), then reload Nginx.
+    location / {
+        proxy_pass [http://127.0.0.1:8080](http://127.0.0.1:8080);
+        
+        # Production Standard Proxy Headers
+        # Ensures the backend application receives the client's actual IP, not the Nginx server's IP.
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
 
-3. **Firewall (UFW) Configuration:**
-   Certbot requires both HTTP (80) and HTTPS (443) ports open for validation and traffic.
-   ```bash
-   sudo ufw allow 'Nginx Full'
-   # Or explicitly: sudo ufw allow 80/tcp && sudo ufw allow 443/tcp
-   sudo ufw reload
-   ```
+        # WebSocket Support
+        # Prevents 502 Bad Gateway errors for real-time apps (e.g., Socket.io, Chat apps).
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+}
+```
+Enable and test the configuration:
+```bash
+sudo ln -s /etc/nginx/sites-available/backend-app /etc/nginx/sites-enabled/
+sudo nginx -t && sudo systemctl reload nginx
+```
 
-4. **Install Certbot (via Python venv - Official standard):**
-   ```bash
-   sudo python3 -m venv /opt/certbot/
-   sudo /opt/certbot/bin/pip install --upgrade pip
-   sudo /opt/certbot/bin/pip install certbot certbot-nginx
-   sudo ln -s /opt/certbot/bin/certbot /usr/local/bin/certbot
-   ```
+---
 
-5. **Generate SSL Certificate:**
-   ```bash
-   sudo certbot --nginx -d <your_domain.com>
-   ```
-   *(Follow on-screen prompts. Certbot will automatically modify the Nginx config to redirect HTTP to HTTPS).*
+## 3. SSL/TLS Implementation & Automation (Let's Encrypt)
+**Use Case:** Securing the domain with industry-standard HTTPS encryption and forcing HTTP-to-HTTPS redirection. 
 
-6. **Automate Certificate Renewal (Cronjob):**
-   SSL certificates expire every 90 days. Set up a cronjob for auto-renewal.
-   ```bash
-   echo "0 0,12 * * * root /opt/certbot/bin/python -c 'import random; import time; time.sleep(random.random() * 3600)' && sudo certbot renew -q" | sudo tee -a /etc/crontab > /dev/null
-   ```
-   **Test Auto-renewal:**
-   ```bash
-   sudo certbot renew --dry-run
-   ```
+### Step 1: Pre-flight Checks
+* Ensure the domain's **A Record** points to the VPS IP in the DNS manager.
+* Open necessary ports via UFW Firewall:
+```bash
+sudo ufw allow 'Nginx Full' # Opens both 80 (HTTP) and 443 (HTTPS)
+```
+
+### Step 2: Install Certbot (Official Venv Method)
+```bash
+sudo python3 -m venv /opt/certbot/
+sudo /opt/certbot/bin/pip install --upgrade pip
+sudo /opt/certbot/bin/pip install certbot certbot-nginx
+sudo ln -s /opt/certbot/bin/certbot /usr/local/bin/certbot
+```
+
+### Step 3: Provision SSL Certificates
+Execute the automated Nginx plugin. This will solve the ACME challenge, generate certificates, and automatically inject `listen 443 ssl` and `return 301` (HTTPS redirect) into the Nginx block.
+```bash
+sudo certbot --nginx -d <your_domain.com> -d www.<your_domain.com>
+```
+
+### Step 4: Zero-Touch Auto-Renewal
+Certificates expire every 90 days. Implement a cronjob to fully automate the renewal process.
+```bash
+echo "0 0,12 * * * root /opt/certbot/bin/python -c 'import random; import time; time.sleep(random.random() * 3600)' && sudo certbot renew -q" | sudo tee -a /etc/crontab > /dev/null
+```
+Verify the automation dry-run:
+```bash
+sudo certbot renew --dry-run
+```
+
+---
+
+## 4. Troubleshooting Reference
+* **Port 80 Conflict (`Address already in use`):** Remove conflicting symlinks from `/etc/nginx/sites-enabled/` and reload. Never delete the original files from `sites-available`.
+* **403 Forbidden Error:** Usually a permissions issue. Verify that the Nginx worker (`www-data`) has read access to the web root (`sudo chown -R www-data:www-data /var/www/path`).
+* **502 Bad Gateway:** The backend application (e.g., Node.js process) is either down or listening on the wrong port. Verify backend status before debugging Nginx.
