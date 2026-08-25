@@ -40,6 +40,11 @@ By default, `mongodump` exports databases as a nested directory structure contai
 ```bash
 mongodump --db=IMS --archive=IMS_backup.archive
 ```
+**Command Breakdown:**
+*   `mongodump`: The utility for creating a binary export of the database contents.
+*   `--db=IMS`: Specifies the exact database to back up (`IMS`).
+*   `--archive=...`: Instructs the utility to output a single archive file instead of a directory structure.
+
 *(Verify the creation of the file using `ls -lh IMS_backup.archive`)*
 
 ---
@@ -62,6 +67,10 @@ Unlike relational databases, MongoDB does not require you to create an empty dat
 ```bash
 mongorestore --archive=IMS_backup.archive
 ```
+**Command Breakdown:**
+*   `mongorestore`: The utility for loading data from a binary database dump.
+*   `--archive=...`: Tells the utility to read the input from the specified archive file.
+
 *(Once completed, log back into `mongosh` and use `show dbs` to verify the restoration.)*
 
 ---
@@ -78,9 +87,17 @@ To restore a local backup archive directly into a remote Atlas cluster:
 ```bash
 mongorestore --uri="mongodb+srv://<username>:<password>@cluster0.abcde.mongodb.net/" --archive=IMS_backup.archive
 ```
+**Command Breakdown:**
+*   `mongorestore`: The restoration utility (runs locally).
+*   `--uri="..."`: The MongoDB Atlas connection string. This tells the tool to connect to the remote cloud cluster using the provided credentials and routing information, rather than looking for a local database.
+*   `--archive=...`: The path to the local archive file you want to upload and restore.
 
 ### Scenario B: Pull Backup from MongoDB Atlas to Local
 To take a backup of a live Atlas database and download it to your local machine:
 ```bash
 mongodump --uri="mongodb+srv://<username>:<password>@cluster0.abcde.mongodb.net/" --archive=atlas_backup.archive
 ```
+**Command Breakdown:**
+*   `mongodump`: The export utility (runs locally).
+*   `--uri="..."`: The remote Atlas connection string pointing to the cloud cluster you want to back up.
+*   `--archive=...`: Instructs the tool to stream the downloaded remote data directly into a single archive file on your local machine.
